@@ -6,7 +6,8 @@ import { getCategory } from '@/constants/categories';
 // Show alerts even when the app is foregrounded.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -39,7 +40,7 @@ export async function scheduleTaskReminder(task: Task): Promise<string | null> {
       body: task.title,
       data: { taskId: task.id },
     },
-    trigger: { date: when },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when },
   });
   return id;
 }

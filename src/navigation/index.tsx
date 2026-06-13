@@ -25,7 +25,7 @@ export function Navigation() {
           headerTintColor: theme.colors.textOnDark,
           headerTitleAlign: 'center',
           // RTL-friendly: back button mirrors automatically in RTL layout.
-          headerBackTitleVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
         }}
       >
         <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />

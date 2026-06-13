@@ -1,4 +1,6 @@
-import * as FileSystem from 'expo-file-system';
+// SDK 54 introduced a new File/Directory API; the classic functions used here
+// (documentDirectory, copyAsync, readAsStringAsync, ...) live under /legacy.
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { supabase } from '@/lib/supabase';
 
