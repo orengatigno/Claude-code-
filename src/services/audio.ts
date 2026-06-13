@@ -1,47 +1,43 @@
-import { Audio } from 'expo-av';
+import {
+  createAudioPlayer,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+  RecordingPresets,
+  AudioModule,
+} from 'expo-audio';
+import type { AudioPlayer, AudioRecorder } from 'expo-audio';
 
-// Thin wrapper around expo-av recording so screens stay declarative.
-
-let recording: Audio.Recording | null = null;
-let playbackSound: Audio.Sound | null = null;
+let recorder: AudioRecorder | null = null;
+let player: AudioPlayer | null = null;
 
 export async function requestMicPermission(): Promise<boolean> {
-  const { granted } = await Audio.requestPermissionsAsync();
+  const { granted } = await requestRecordingPermissionsAsync();
   return granted;
 }
 
 export async function startRecording(): Promise<void> {
-  await Audio.setAudioModeAsync({
-    allowsRecordingIOS: true,
-    playsInSilentModeIOS: true,
-  });
-  const { recording: rec } = await Audio.Recording.createAsync(
-    Audio.RecordingOptionsPresets.HIGH_QUALITY,
-  );
-  recording = rec;
+  await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+  recorder = new AudioModule.AudioRecorder(RecordingPresets.HIGH_QUALITY);
+  await recorder.prepareToRecordAsync();
+  recorder.record();
 }
 
-/** Stops recording and returns the local file URI of the captured audio. */
+/** Stops the active recording and returns the local file URI. */
 export async function stopRecording(): Promise<string | null> {
-  if (!recording) return null;
-  await recording.stopAndUnloadAsync();
-  await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-  const uri = recording.getURI();
-  recording = null;
+  if (!recorder) return null;
+  await recorder.stop();
+  const uri = recorder.uri;
+  recorder.release();
+  recorder = null;
+  await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
   return uri ?? null;
 }
 
 export async function playAudio(uri: string): Promise<void> {
-  if (playbackSound) {
-    await playbackSound.unloadAsync();
-    playbackSound = null;
+  if (player) {
+    player.remove();
+    player = null;
   }
-  const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
-  playbackSound = sound;
-  sound.setOnPlaybackStatusUpdate((status) => {
-    if (status.isLoaded && status.didJustFinish) {
-      sound.unloadAsync();
-      playbackSound = null;
-    }
-  });
+  player = createAudioPlayer(uri);
+  player.play();
 }

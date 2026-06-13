@@ -29,7 +29,7 @@
       ]
     },
     "plugins": [
-      "expo-av",
+      "expo-audio",
       "expo-image-picker",
       "expo-notifications"
     ],
