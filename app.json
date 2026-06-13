@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "תזכורות קוליות",
+    "slug": "hebrew-voice-tasks",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "hebrewvoicetasks",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.personal.hebrewvoicetasks",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "האפליקציה צריכה גישה למיקרופון כדי להקליט הערות קוליות.",
+        "NSPhotoLibraryUsageDescription": "האפליקציה צריכה גישה לתמונות כדי לחלץ משימות מצילומים.",
+        "NSCameraUsageDescription": "האפליקציה צריכה גישה למצלמה כדי לצלם משימות."
+      }
+    },
+    "android": {
+      "package": "com.personal.hebrewvoicetasks",
+      "permissions": [
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-av",
+      "expo-image-picker",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#0F172A"
+        }
+      ]
+    ],
+    "extra": {
+      "supabaseUrl": "SET_VIA_ENV",
+      "supabaseAnonKey": "SET_VIA_ENV"
+    }
+  }
+}
