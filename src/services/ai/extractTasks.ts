@@ -1,4 +1,4 @@
-import { ExtractedTask } from '@/types';
+import { CategoryId, ExtractedTask } from '@/types';
 import { config } from '@/lib/config';
 import { parseHebrewReminder } from '@/services/reminders/hebrewDateParser';
 import { categorizeByKeywords } from './categorize';
@@ -106,47 +106,89 @@ export function extractTasksMock(text: string, now: Date = new Date()): Extracte
 /**
  * REAL extraction — TODO.
  *
- * Recommended approach: send the transcript to an LLM and ask for a strict JSON
- * array of tasks. Let the model do task-splitting + categorization + reminder
- * extraction in one shot, then fall back to the mock parsers for any field the
- * model leaves null. Keep the categories enum identical to CategoryId.
- *
- * IMPORTANT: do not embed the API key in the app bundle. Proxy this call
- * through a Supabase Edge Function and read config.aiApiBaseUrl from there.
- *
- * Example (pseudocode) using a chat/completions-style JSON endpoint:
- *
- *   const res = await fetch(`${config.aiApiBaseUrl}/chat/completions`, {
- *     method: 'POST',
- *     headers: {
- *       'Content-Type': 'application/json',
- *       Authorization: `Bearer ${config.aiApiKey}`,
- *     },
- *     body: JSON.stringify({
- *       model: 'gpt-4o-mini', // or an Anthropic model via its Messages API
- *       response_format: { type: 'json_object' },
- *       messages: [
- *         { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
- *         { role: 'user', content: text },
- *       ],
- *     }),
- *   });
- *   const json = await res.json();
- *   const parsed = JSON.parse(json.choices[0].message.content);
- *   return parsed.tasks.map(normalizeExtractedTask);
- *
- * The system prompt should:
- *   - instruct the model to answer in Hebrew,
- *   - return ONLY JSON: { "tasks": [{ title, category, reminder_phrase }] },
- *   - constrain category to the CategoryId enum,
- *   - return the raw Hebrew time phrase so parseHebrewReminder can resolve it
- *     to an absolute date on-device (timezone-correct).
+ * The model splits the transcript into tasks, categorizes each, and returns the
+ * RAW Hebrew time phrase. We resolve that phrase to an absolute date on-device
+ * with parseHebrewReminder so the timezone is always the phone's.
  */
+const VALID_CATEGORIES: CategoryId[] = [
+  'home', 'finance', 'kids', 'ilay', 'ella', 'isabelle',
+  'work', 'airbnb', 'shopping', 'legal', 'inbox',
+];
+
+const EXTRACTION_SYSTEM_PROMPT = `אתה עוזר אישי שמקבל תמלול בעברית של הודעה קולית ומחלץ ממנה משימות.
+החזר JSON בלבד בפורמט: { "tasks": [ { "title": string, "category": string, "reminder_phrase": string } ] }
+
+כללים:
+- "title": ניסוח קצר וברור של המשימה בעברית (פעולה אחת לכל משימה).
+- "category": אחת מהקטגוריות הבאות בלבד (באנגלית):
+  home (בית), finance (כספים/תשלומים/בנק), kids (ילדים כללי), ilay (עילאי),
+  ella (אלה), isabelle (איזבל), work (עבודה), airbnb (השכרות/אורחים),
+  shopping (קניות/סידורים), legal (משפטי/בירוקרטיה/חוזים/אדמות/נדל"ן), inbox (כללי/לא ברור).
+- אם המשימה לא מתאימה לאף קטגוריה ספציפית, השתמש ב-"inbox".
+- "reminder_phrase": העתק את ביטוי הזמן בעברית כפי שנאמר (למשל "מחר בבוקר", "עוד שעה", "ביום ראשון"). אם אין זמן, החזר מחרוזת ריקה "".
+- אם אין משימות כלל, החזר { "tasks": [] }.
+- אל תמציא משימות שלא נאמרו.`;
+
 export async function extractTasksReal(text: string, now: Date = new Date()): Promise<ExtractedTask[]> {
-  // TODO: implement the real LLM call described above.
-  // For now, degrade gracefully to the mock so the UI keeps working.
-  void config;
-  return extractTasksMock(text, now);
+  if (!config.aiApiKey) {
+    throw new Error('Missing EXPO_PUBLIC_AI_API_KEY — set it in .env to use real extraction.');
+  }
+
+  const res = await fetch(`${config.aiApiBaseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.aiApiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.extractionModel,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: EXTRACTION_SYSTEM_PROMPT },
+        { role: 'user', content: text },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Extraction failed (${res.status}): ${detail}`);
+  }
+
+  const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+  const content = json.choices?.[0]?.message?.content ?? '{"tasks":[]}';
+
+  let parsed: { tasks?: { title?: string; category?: string; reminder_phrase?: string }[] };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    // If the model returned non-JSON, fall back to the on-device parser.
+    return extractTasksMock(text, now);
+  }
+
+  const rawTasks = parsed.tasks ?? [];
+  return rawTasks
+    .filter((t) => t.title && t.title.trim())
+    .map((t) => {
+      const category: CategoryId = VALID_CATEGORIES.includes(t.category as CategoryId)
+        ? (t.category as CategoryId)
+        : 'inbox';
+      const reminder = t.reminder_phrase
+        ? parseHebrewReminder(t.reminder_phrase, now)
+        : { date: null };
+      const reminderIso = reminder.date ? reminder.date.toISOString() : null;
+
+      return {
+        title: t.title!.trim(),
+        description: null,
+        category,
+        reminder_at: reminderIso,
+        due_at: reminderIso,
+        status: reminderIso ? 'open' : 'needs_scheduling',
+        confidence: 0.9,
+      } satisfies ExtractedTask;
+    });
 }
 
 export async function extractTasks(text: string, now: Date = new Date()): Promise<ExtractedTask[]> {

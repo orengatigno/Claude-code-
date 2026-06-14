@@ -22,6 +22,7 @@ export const STR = {
     edit: 'עריכה',
     delete: 'מחיקה',
     listenOriginal: 'האזן להקלטה המקורית',
+    stopPlaying: 'עצור',
     noReminder: 'ללא תזכורת',
     reminderAt: 'תזכורת:',
   },

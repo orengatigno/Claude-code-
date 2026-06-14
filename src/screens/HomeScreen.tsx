@@ -53,7 +53,7 @@ export function HomeScreen({ navigation }: Props) {
     } catch (e) {
       setRecording(false);
       console.warn(e);
-      Alert.alert(STR.common.error);
+      Alert.alert(STR.common.error, e instanceof Error ? e.message : undefined);
     }
   }
 
@@ -71,7 +71,7 @@ export function HomeScreen({ navigation }: Props) {
       Alert.alert(buildConfirmation(categories));
     } catch (e) {
       console.warn(e);
-      Alert.alert(STR.common.error);
+      Alert.alert(STR.common.error, e instanceof Error ? e.message : undefined);
     }
   }
 

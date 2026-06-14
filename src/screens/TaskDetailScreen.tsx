@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -16,7 +16,7 @@ import { STR } from '@/constants/strings';
 import { theme } from '@/theme';
 import { useTasksStore } from '@/store/useTasksStore';
 import { formatReminder, REMINDER_PRESETS } from '@/lib/datetime';
-import { playAudio } from '@/services/audio';
+import { playAudio, stopPlayback } from '@/services/audio';
 import type { CategoryId, SourceType } from '@/types';
 import type { RootStackParamList } from '@/navigation';
 
@@ -38,6 +38,20 @@ export function TaskDetailScreen({ route, navigation }: Props) {
 
   const [title, setTitle] = useState(task?.title ?? '');
   const [description, setDescription] = useState(task?.description ?? '');
+  const [playing, setPlaying] = useState(false);
+
+  // Stop playback if we leave the screen.
+  useEffect(() => () => stopPlayback(), []);
+
+  function togglePlay(uri: string) {
+    if (playing) {
+      stopPlayback();
+      setPlaying(false);
+    } else {
+      setPlaying(true);
+      playAudio(uri, () => setPlaying(false));
+    }
+  }
 
   if (!task) {
     return (
@@ -153,10 +167,12 @@ export function TaskDetailScreen({ route, navigation }: Props) {
         ) : null}
         {voiceNote?.audio_url ? (
           <Pressable
-            style={styles.listenBtn}
-            onPress={() => playAudio(voiceNote.audio_url!).catch(() => {})}
+            style={[styles.listenBtn, playing && styles.stopBtn]}
+            onPress={() => togglePlay(voiceNote.audio_url!)}
           >
-            <Text style={styles.listenText}>▶︎ {STR.tasks.listenOriginal}</Text>
+            <Text style={styles.listenText}>
+              {playing ? `■ ${STR.tasks.stopPlaying}` : `▶︎ ${STR.tasks.listenOriginal}`}
+            </Text>
           </Pressable>
         ) : null}
 
@@ -234,6 +250,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: theme.spacing(2),
   },
+  stopBtn: { backgroundColor: theme.colors.danger },
   listenText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   footer: { flexDirection: 'row-reverse', gap: theme.spacing(3), marginTop: theme.spacing(6) },
   bigBtn: { flex: 1, paddingVertical: theme.spacing(4), borderRadius: theme.radius.md, alignItems: 'center' },

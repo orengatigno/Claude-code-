@@ -29,15 +29,42 @@ export async function stopRecording(): Promise<string | null> {
   const uri = recorder.uri;
   recorder.release();
   recorder = null;
+  // Switch the audio session back to playback so the speaker isn't muted.
   await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
   return uri ?? null;
 }
 
-export async function playAudio(uri: string): Promise<void> {
+/** Tears down any active player. Safe to call repeatedly. */
+export function stopPlayback(): void {
   if (player) {
-    player.remove();
+    try {
+      player.pause();
+      player.remove();
+    } catch {
+      // already released
+    }
     player = null;
   }
-  player = createAudioPlayer(uri);
-  player.play();
+}
+
+/**
+ * Plays an audio file. Always stops any previous playback first so presses
+ * never stack on top of each other. `onFinish` fires when playback ends so the
+ * UI can reset its Play/Stop toggle.
+ */
+export function playAudio(uri: string, onFinish?: () => void): void {
+  stopPlayback();
+  const p = createAudioPlayer(uri);
+  player = p;
+  p.addListener('playbackStatusUpdate', (status) => {
+    if (status.didJustFinish) {
+      stopPlayback();
+      onFinish?.();
+    }
+  });
+  p.play();
+}
+
+export function isPlaying(): boolean {
+  return Boolean(player?.playing);
 }

@@ -29,32 +29,46 @@ export async function transcribeMock(_audioUri: string): Promise<string> {
 }
 
 /**
- * REAL transcription — TODO.
+ * REAL transcription — OpenAI Whisper (or any compatible /audio/transcriptions
+ * endpoint) with the Hebrew language hint.
  *
- * Upload the recorded file to a speech-to-text endpoint with the Hebrew
- * language hint. With OpenAI Whisper this is a multipart POST to
- * `${config.aiApiBaseUrl}/audio/transcriptions` with `model=whisper-1` and
- * `language=he`. Again: proxy through a Supabase Edge Function in production so
- * the API key stays server-side.
- *
- * Example (pseudocode):
- *
- *   const form = new FormData();
- *   form.append('file', { uri: audioUri, name: 'note.m4a', type: 'audio/m4a' } as any);
- *   form.append('model', 'whisper-1');
- *   form.append('language', 'he');
- *   const res = await fetch(`${config.aiApiBaseUrl}/audio/transcriptions`, {
- *     method: 'POST',
- *     headers: { Authorization: `Bearer ${config.aiApiKey}` },
- *     body: form,
- *   });
- *   const json = await res.json();
- *   return json.text;
+ * SECURITY NOTE: for a personal single-user app this calls the API directly
+ * with the key from .env. That key ships in the app bundle — acceptable for a
+ * private build, but before sharing the app, move this call behind a Supabase
+ * Edge Function so the key stays server-side.
  */
 export async function transcribeReal(audioUri: string): Promise<string> {
-  // TODO: implement the real STT call described above.
-  void config;
-  return transcribeMock(audioUri);
+  if (!config.aiApiKey) {
+    throw new Error('Missing EXPO_PUBLIC_AI_API_KEY — set it in .env to use real transcription.');
+  }
+
+  const form = new FormData();
+  // React Native FormData accepts a { uri, name, type } file object.
+  form.append('file', {
+    uri: audioUri,
+    name: 'note.m4a',
+    type: 'audio/m4a',
+  } as unknown as Blob);
+  form.append('model', config.transcriptionModel);
+  form.append('language', 'he'); // Hebrew
+  form.append('response_format', 'json');
+
+  const res = await fetch(`${config.aiApiBaseUrl}/audio/transcriptions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.aiApiKey}`,
+      // NOTE: do NOT set Content-Type — fetch sets the multipart boundary.
+    },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Transcription failed (${res.status}): ${detail}`);
+  }
+
+  const json = (await res.json()) as { text?: string };
+  return (json.text ?? '').trim();
 }
 
 export async function transcribe(audioUri: string): Promise<string> {
